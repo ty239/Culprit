@@ -1,0 +1,10 @@
+
+apiversion: v1
+kind : pod
+MetaData: 
+name: user-api
+lables:
+app: user-api
+envioremnt: development
+annotations:
+    description: "Python FastAPI application
