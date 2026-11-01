@@ -1,13 +1,12 @@
-
-apiversion: v1   # so we used the kub server api to check the status of pods in are cluster
-kind : pod       # kind is just what do i want kub what kub rescoes I want to create there 3: pod: depolyment:
-MetaData:           # infomration that describes the resources                                                    
-name:  get-api
-lables:
-website : backend
-
-envioremnt: development
-annotations:
-    description: "Python FastAPI application
-    metadata:
-    
+apiVersion: v1
+kind: Pod
+metadata:
+  name: get-api
+  labels:
+    website: backend
+spec:
+  containers:
+    - name: python-api
+      image: my-python-app:1.0
+      ports:
+        - containerPort: 8000
