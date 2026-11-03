@@ -1,12 +1,36 @@
-apiVersion: v1
-kind: Pod
+#broken image
+apiVersion: v1  # it the veriosn of api 
+kind: Pod       # what rescoss can we use for api delovment work
 metadata:
-  name: get-api
+  name: user-api      
   labels:
-    website: backend
+    app: user-api
+    environment: development
+  annotations:
+    description: "Python FastAPI application"     
 spec:
   containers:
     - name: python-api
       image: my-python-app:1.0
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the image downloads fine, but uvicorn isn't installed in it,
+# so the container crashes on startup and Kubernetes keeps restarting it (CrashLoopBackOff).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crash-api
+  labels:
+    app: crash-api
+    environment: development
+  annotations:
+    description: "Python FastAPI application missing its dependencies"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
       ports:
         - containerPort: 8000
