@@ -2,4 +2,6 @@
 WORKDIR /app
 RUN pip install --no-cache-dir fastapi uvicorn
 COPY backend.py .
-CMD ["uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]   # how to run the code 
+
+
