@@ -124,3 +124,44 @@ Error from server (NotFound): secrets "db-credentials" not found
 
 ---
 
+## 4. `memory-api`: killed for using too much memory
+
+> This pod is still running on the cluster, but its YAML is currently **not** in `broken-pods.yaml`.
+
+**Step 1: see the symptom**
+```powershell
+kubectl get pod memory-api
+```
+```
+NAME         READY   STATUS             RESTARTS         AGE
+memory-api   0/1     CrashLoopBackOff   27 (3m29s ago)   24h
+```
+It flips between `OOMKilled` and `CrashLoopBackOff`, and can briefly show `Running`.
+
+**Step 2: see how it ended last time.** This is the key command:
+```powershell
+kubectl get pod memory-api -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason} {.status.containerStatuses[0].lastState.terminated.exitCode}'
+```
+```
+OOMKilled 137
+```
+`OOMKilled` means "out of memory, killed". `137` is the code for a program that was force-stopped.
+
+**Step 3: see its memory limit**
+```powershell
+kubectl get pod memory-api -o jsonpath='{.spec.containers[0].resources.limits.memory}'
+```
+```
+64Mi
+```
+
+**Step 4: check the logs.** They're empty, which is a clue in itself:
+```powershell
+kubectl logs memory-api --previous
+```
+It prints nothing, because the app is killed before it can print anything.
+
+**Root cause:** the app tries to use about 200MB, but its limit is 64Mi.
+
+---
+
