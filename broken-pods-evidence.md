@@ -165,3 +165,43 @@ It prints nothing, because the app is killed before it can print anything.
 
 ---
 
+## 5. `pending-api`: can't be placed on a node
+
+**Step 1: see the symptom**
+```powershell
+kubectl get pod pending-api -o wide
+```
+```
+NAME          READY   STATUS    RESTARTS   AGE   IP       NODE     ...
+pending-api   0/1     Pending   0          24h   <none>   <none>   ...
+```
+`NODE` is `<none>`, so it never got a node.
+
+**Step 2: see the error.** This is stored on the pod, so it doesn't expire:
+```powershell
+kubectl get pod pending-api -o jsonpath='{.status.conditions[0].message}'
+```
+```
+0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.
+```
+
+**Step 3: prove the root cause.** Compare what it asks for with what the node has:
+```powershell
+kubectl get pod pending-api -o jsonpath='{.spec.containers[0].resources.requests.cpu}'
+kubectl get node culprit-control-plane -o jsonpath='{.status.allocatable.cpu}'
+```
+```
+100
+16
+```
+
+**Root cause:** it asks for 100 CPUs, and the only node has 16.
+
+---
+
+## Quick check for all of them at once
+
+```powershell
+kubectl get pods -l environment=development
+```
+Any pod that isn't `1/1` and `Running` is broken. Then use that pod's section above to find out why.
