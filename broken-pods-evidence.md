@@ -92,3 +92,35 @@ kubectl logs crash-api --previous
 
 ---
 
+## 3. `secret-api`: blocked before starting
+
+**Step 1: see the symptom**
+```powershell
+kubectl get pod secret-api
+```
+```
+NAME         READY   STATUS                       RESTARTS   AGE
+secret-api   0/1     CreateContainerConfigError   0          25h
+```
+`RESTARTS` stays at `0` because the container never started.
+
+**Step 2: see the error.** This is stored on the pod, so it doesn't expire:
+```powershell
+kubectl get pod secret-api -o jsonpath='{.status.containerStatuses[0].state.waiting.message}'
+```
+```
+secret "db-credentials" not found
+```
+
+**Step 3: prove the root cause.** The Secret really doesn't exist:
+```powershell
+kubectl get secret db-credentials
+```
+```
+Error from server (NotFound): secrets "db-credentials" not found
+```
+
+**Root cause:** the pod needs `password` from the Secret `db-credentials`, and that Secret was never created.
+
+---
+
