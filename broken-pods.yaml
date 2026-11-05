@@ -1,10 +1,83 @@
-
-apiversion: v1
-kind : pod
-MetaData: 
-name: user-api
-lables:
-app: user-api
-envioremnt: development
-annotations:
-    description: "Python FastAPI application
+#broken image
+apiVersion: v1  # it the veriosn of api 
+kind: Pod       # what rescoss can we use for api delovment work
+metadata:
+  name: user-api      
+  labels:
+    app: user-api
+    environment: development
+  annotations:
+    description: "Python FastAPI application"     
+spec:
+  containers:
+    - name: python-api
+      image: my-python-app:1.0
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the image downloads fine, but uvicorn isn't installed in it,
+# so the container crashes on startup and Kubernetes keeps restarting it (CrashLoopBackOff).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crash-api
+  labels:
+    app: crash-api
+    environment: development
+  annotations:
+    description: "Python FastAPI application missing its dependencies"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the app needs a password from a Secret called "db-credentials",
+# but that Secret doesn't exist, so the container is never started (CreateContainerConfigError).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-api
+  labels:
+    app: secret-api
+    environment: development
+  annotations:
+    description: "Python app that needs a database password from a missing Secret"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: asks for 100 CPUs, more than any node has, so Kubernetes can't
+# place it on a node and it stays Pending forever (FailedScheduling: Insufficient cpu).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pending-api
+  labels:
+    app: pending-api
+    environment: development
+  annotations:
+    description: "Python app that asks for more CPU than any node has"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      resources:
+        requests:
+          cpu: "100"
+      ports:
+        - containerPort: 8000
