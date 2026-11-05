@@ -58,3 +58,37 @@ No output means it's not there.
 
 ---
 
+## 2. `crash-api`: app starts, then crashes
+
+**Step 1: see the symptom**
+```powershell
+kubectl get pod crash-api
+```
+```
+NAME        READY   STATUS             RESTARTS        AGE
+crash-api   0/1     CrashLoopBackOff   134 (46s ago)   2d1h
+```
+The `RESTARTS` number keeps going up.
+
+**Step 2: see how it ended last time**
+```powershell
+kubectl get pod crash-api -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason} {.status.containerStatuses[0].lastState.terminated.exitCode}'
+```
+```
+Error 1
+```
+Exit code `1` means the app itself stopped with an error.
+
+**Step 3: read the app's error message**
+```powershell
+kubectl logs crash-api --previous
+```
+```
+/usr/local/bin/python: No module named uvicorn
+```
+`--previous` shows the logs from the last crash. Without it, you may get nothing, because the new attempt hasn't printed anything yet.
+
+**Root cause:** the image `python:3.12-slim` has no `uvicorn`, but the command needs it.
+
+---
+
