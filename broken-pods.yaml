@@ -59,3 +59,25 @@ spec:
               key: password
       ports:
         - containerPort: 8000
+---
+# Broken on purpose: asks for 100 CPUs, more than any node has, so Kubernetes can't
+# place it on a node and it stays Pending forever (FailedScheduling: Insufficient cpu).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pending-api
+  labels:
+    app: pending-api
+    environment: development
+  annotations:
+    description: "Python app that asks for more CPU than any node has"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      resources:
+        requests:
+          cpu: "100"
+      ports:
+        - containerPort: 8000
