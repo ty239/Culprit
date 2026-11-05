@@ -19,3 +19,42 @@ Run them from PowerShell, in any folder.
 
 ---
 
+## 1. `user-api`: image can't be downloaded
+
+**Step 1: see the symptom**
+```powershell
+kubectl get pod user-api
+```
+```
+NAME       READY   STATUS         RESTARTS   AGE
+user-api   0/1     ErrImagePull   0          3d2h
+```
+It flips between `ErrImagePull` (a download just failed) and `ImagePullBackOff` (waiting before the next try). It's the same failure.
+
+**Step 2: see which image it wants**
+```powershell
+kubectl get pod user-api -o jsonpath='{.spec.containers[0].image}'
+```
+```
+my-python-app:1.0
+```
+
+**Step 3: see the error** (only while it's fresh)
+```powershell
+kubectl describe pod user-api
+```
+Look at **Events** at the bottom:
+```
+Failed to pull image "my-python-app:1.0": ... pull access denied, repository does not exist or may require authorization
+```
+
+**Step 4: prove the root cause.** The image isn't on the cluster's node:
+```powershell
+docker exec culprit-control-plane crictl images | Select-String my-python-app
+```
+No output means it's not there.
+
+**Root cause:** `my-python-app:1.0` was built on the PC but never loaded into the cluster.
+
+---
+
