@@ -34,3 +34,28 @@ spec:
       command: ["python", "-m", "uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
       ports:
         - containerPort: 8000
+---
+# Broken on purpose: the app needs a password from a Secret called "db-credentials",
+# but that Secret doesn't exist, so the container is never started (CreateContainerConfigError).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-api
+  labels:
+    app: secret-api
+    environment: development
+  annotations:
+    description: "Python app that needs a database password from a missing Secret"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+      ports:
+        - containerPort: 8000
