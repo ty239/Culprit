@@ -1,0 +1,228 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  count: 348
+  eventTime: null
+  firstTimestamp: "2026-11-03T02:11:42Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: crash-api
+    namespace: default
+    resourceVersion: "59886"
+    uid: 85395fab-ff65-44b7-a27d-92ae369da308
+  kind: Event
+  lastTimestamp: "2026-11-08T18:26:07Z"
+  message: Container image "python:3.12-slim" already present on machine
+  metadata:
+    creationTimestamp: "2026-11-08T18:26:07Z"
+    name: crash-api.18e4671794c8d18d
+    namespace: default
+    resourceVersion: "189457"
+    uid: ed0106fd-8f72-45d2-b1d1-c49d4198fef1
+  reason: Pulled
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Normal
+- apiVersion: v1
+  count: 7654
+  eventTime: null
+  firstTimestamp: "2026-11-03T02:11:43Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: crash-api
+    namespace: default
+    resourceVersion: "59886"
+    uid: 85395fab-ff65-44b7-a27d-92ae369da308
+  kind: Event
+  lastTimestamp: "2026-11-09T02:28:26Z"
+  message: Back-off restarting failed container python-api in pod crash-api_default(85395fab-ff65-44b7-a27d-92ae369da308)
+  metadata:
+    creationTimestamp: "2026-11-03T02:11:43Z"
+    name: crash-api.18e46717d0ad3f6a
+    namespace: default
+    resourceVersion: "193077"
+    uid: d391c0fe-c829-412b-b1f3-f3f85c108ce2
+  reason: BackOff
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Warning
+- apiVersion: v1
+  count: 254
+  eventTime: null
+  firstTimestamp: "2026-11-04T03:00:39Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: memory-api
+    namespace: default
+    resourceVersion: "100676"
+    uid: a9db8782-9e9b-4cc6-975a-625538cf5b85
+  kind: Event
+  lastTimestamp: "2026-11-08T18:49:35Z"
+  message: Container image "python:3.12-slim" already present on machine
+  metadata:
+    creationTimestamp: "2026-11-08T18:49:35Z"
+    name: memory-api.18e4b858029619d1
+    namespace: default
+    resourceVersion: "190640"
+    uid: e326653f-dbc4-4aeb-9285-76a2ffc9fd74
+  reason: Pulled
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Normal
+- apiVersion: v1
+  count: 253
+  eventTime: null
+  firstTimestamp: "2026-11-04T03:00:39Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: memory-api
+    namespace: default
+    resourceVersion: "100676"
+    uid: a9db8782-9e9b-4cc6-975a-625538cf5b85
+  kind: Event
+  lastTimestamp: "2026-11-08T18:44:28Z"
+  message: Started container python-api
+  metadata:
+    creationTimestamp: "2026-11-08T18:44:28Z"
+    name: memory-api.18e4b8580f66e12b
+    namespace: default
+    resourceVersion: "190228"
+    uid: f8a590ca-4cae-406d-a3e1-713719e16da0
+  reason: Started
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Normal
+- apiVersion: v1
+  count: 5283
+  eventTime: null
+  firstTimestamp: "2026-11-04T03:00:41Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: memory-api
+    namespace: default
+    resourceVersion: "100676"
+    uid: a9db8782-9e9b-4cc6-975a-625538cf5b85
+  kind: Event
+  lastTimestamp: "2026-11-09T02:28:08Z"
+  message: Back-off restarting failed container python-api in pod memory-api_default(a9db8782-9e9b-4cc6-975a-625538cf5b85)
+  metadata:
+    creationTimestamp: "2026-11-04T03:00:41Z"
+    name: memory-api.18e4b858735b6822
+    namespace: default
+    resourceVersion: "193055"
+    uid: 661774a9-8c17-466f-9aba-707445856dc4
+  reason: BackOff
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Warning
+- apiVersion: v1
+  count: 219
+  eventTime: null
+  firstTimestamp: "2026-11-04T03:27:28Z"
+  involvedObject:
+    apiVersion: v1
+    kind: Pod
+    name: pending-api
+    namespace: default
+    resourceVersion: "102378"
+    uid: 53ed907b-5889-4ab0-856d-fb29332f069f
+  kind: Event
+  lastTimestamp: "2026-11-09T02:26:54Z"
+  message: '0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are
+    available: 1 No preemption victims found for incoming pod.'
+  metadata:
+    creationTimestamp: "2026-11-04T03:27:28Z"
+    name: pending-api.18e4b9ceada26971
+    namespace: default
+    resourceVersion: "192957"
+    uid: ac6d1297-c2be-4c75-99b4-bac81a2439b2
+  reason: FailedScheduling
+  reportingComponent: default-scheduler
+  reportingInstance: ""
+  source:
+    component: default-scheduler
+  type: Warning
+- apiVersion: v1
+  count: 5434
+  eventTime: null
+  firstTimestamp: "2026-11-04T02:37:05Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: secret-api
+    namespace: default
+    resourceVersion: "98821"
+    uid: ec3f02cf-cbc5-417b-bfe5-c79348f093e7
+  kind: Event
+  lastTimestamp: "2026-11-09T02:29:58Z"
+  message: Container image "python:3.12-slim" already present on machine
+  metadata:
+    creationTimestamp: "2026-11-04T02:37:05Z"
+    name: secret-api.18e4b70ed580770a
+    namespace: default
+    resourceVersion: "193199"
+    uid: ec1fd088-f827-4731-b9e1-c156a1fd3313
+  reason: Pulled
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Normal
+- apiVersion: v1
+  count: 7883
+  eventTime: null
+  firstTimestamp: "2026-11-02T01:23:06Z"
+  involvedObject:
+    apiVersion: v1
+    fieldPath: spec.containers{python-api}
+    kind: Pod
+    name: user-api
+    namespace: default
+    resourceVersion: "50450"
+    uid: 221a7a97-5d27-4988-b0d2-034488ea0566
+  kind: Event
+  lastTimestamp: "2026-11-09T02:28:29Z"
+  message: Back-off pulling image "my-python-app:1.0"
+  metadata:
+    creationTimestamp: "2026-11-02T01:23:06Z"
+    name: user-api.18e415dbf850ab84
+    namespace: default
+    resourceVersion: "193083"
+    uid: a041708c-8856-4162-8486-6d5ab6f0e54f
+  reason: BackOff
+  reportingComponent: kubelet
+  reportingInstance: culprit-control-plane
+  source:
+    component: kubelet
+    host: culprit-control-plane
+  type: Normal
+kind: List
+metadata:
+  resourceVersion: ""

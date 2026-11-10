@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    description: Python app that asks for more CPU than any node has
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Pod","metadata":{"annotations":{"description":"Python app that asks for more CPU than any node has"},"labels":{"app":"pending-api","environment":"development"},"name":"pending-api","namespace":"default"},"spec":{"containers":[{"command":["python","-m","http.server","8000"],"image":"python:3.12-slim","name":"python-api","ports":[{"containerPort":8000}],"resources":{"requests":{"cpu":"100"}}}]}}
+  creationTimestamp: "2026-11-04T03:27:28Z"
+  labels:
+    app: pending-api
+    environment: development
+  name: pending-api
+  namespace: default
+  resourceVersion: "102380"
+  uid: 53ed907b-5889-4ab0-856d-fb29332f069f
+spec:
+  containers:
+  - command:
+    - python
+    - -m
+    - http.server
+    - "8000"
+    image: python:3.12-slim
+    imagePullPolicy: IfNotPresent
+    name: python-api
+    ports:
+    - containerPort: 8000
+      protocol: TCP
+    resources:
+      requests:
+        cpu: "100"
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-ns8s4
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-ns8s4
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-11-04T03:27:28Z"
+    message: '0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are
+      available: 1 No preemption victims found for incoming pod.'
+    reason: Unschedulable
+    status: "False"
+    type: PodScheduled
+  phase: Pending
+  qosClass: Burstable

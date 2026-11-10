@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/culprit/culprit/internal/cluster"
+	"github.com/culprit/culprit/internal/collect"
 )
 
 func main() {
@@ -34,10 +36,23 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Status goes to stderr so stdout is only the JSON snapshot
+			// (safe to redirect: kubectl-culprit crash-api > snap.json).
 			fmt.Fprintf(cmd.ErrOrStderr(), "connected to %s (%s, Kubernetes %s), namespace %q, pod %q\n",
 				conn.Context, conn.Server, conn.ServerVersion, conn.Namespace, args[0])
-			// Next step: collect.Collect(ctx, conn.Client, conn.Namespace, args[0])
-			return nil
+
+			snap, err := collect.New(conn.Client).Collect(cmd.Context(), conn.Namespace, args[0])
+			if err != nil {
+				return err
+			}
+			snap.Context = conn.Context
+			if n := len(snap.Errors); n > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %d read(s) failed, see \"errors\" in the snapshot\n", n)
+			}
+
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(snap)
 		},
 	}
 
