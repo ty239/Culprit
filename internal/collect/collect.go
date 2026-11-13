@@ -55,22 +55,26 @@ func (c *Collector) Collect(ctx context.Context, ns, name string) (*snapshot.Sna
 	cleanPod(pod)
 
 	snap := &snapshot.Snapshot{
-		CollectedAt: now().UTC(),
-		Namespace:   ns,
-		PodName:     name,
-		Pod:         pod,
-		Logs:        map[string]snapshot.ContainerLogs{},
-		Events:      []snapshot.Event{},
-		Nodes:       []snapshot.Node{},
-		Secrets:     []snapshot.Reference{},
-		ConfigMaps:  []snapshot.Reference{},
-		Errors:      []snapshot.CollectError{},
+		CollectedAt:    now().UTC(),
+		Namespace:      ns,
+		PodName:        name,
+		Pod:            pod,
+		Logs:           map[string]snapshot.ContainerLogs{},
+		Events:         []snapshot.Event{},
+		Nodes:          []snapshot.Node{},
+		Secrets:        []snapshot.Reference{},
+		ConfigMaps:     []snapshot.Reference{},
+		PVCs:           []snapshot.PVC{},
+		PVs:            []snapshot.PV{},
+		StorageClasses: []snapshot.StorageClass{},
+		Errors:         []snapshot.CollectError{},
 	}
 
 	c.collectLogs(ctx, snap)
 	c.collectEvents(ctx, snap)
 	c.collectNodes(ctx, snap)
 	c.collectRefs(ctx, snap)
+	c.collectStorage(ctx, snap)
 
 	return snap, nil
 }

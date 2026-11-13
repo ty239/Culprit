@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,6 +26,8 @@ import (
 //
 //	kubectl get sa default -o yaml --show-managed-fields=false
 //	kubectl get cm kube-root-ca.crt -o yaml --show-managed-fields=false
+//	kubectl get sc standard -o yaml --show-managed-fields=false
+//	kubectl get pvc storage-api-data -o yaml --show-managed-fields=false
 func loadYAML(t *testing.T, file string, into any) {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", file))
@@ -44,7 +47,11 @@ func realClusterObjects(t *testing.T) []runtime.Object {
 	loadYAML(t, "serviceaccount-default.yaml", &sa)
 	var cm corev1.ConfigMap
 	loadYAML(t, "configmap-kube-root-ca.crt.yaml", &cm)
-	return []runtime.Object{loadNode(t, "culprit-control-plane"), &sa, &cm}
+	var sc storagev1.StorageClass
+	loadYAML(t, "storageclass-standard.yaml", &sc)
+	var pvc corev1.PersistentVolumeClaim
+	loadYAML(t, "pvc-storage-api-data.yaml", &pvc)
+	return []runtime.Object{loadNode(t, "culprit-control-plane"), &sa, &cm, &sc, &pvc}
 }
 
 const secretValue = "s3cr3t-hunter2" // must never appear in a snapshot

@@ -40,6 +40,12 @@ type Snapshot struct {
 	// ServiceAccount is the account the pod runs as.
 	ServiceAccount *ServiceAccountRef `json:"serviceAccount,omitempty"`
 
+	// Storage chain: the pod's PVCs → the PVs they're bound to → the
+	// StorageClasses they ask for. Each sorted by name.
+	PVCs           []PVC          `json:"pvcs"`
+	PVs            []PV           `json:"pvs"`
+	StorageClasses []StorageClass `json:"storageClasses"`
+
 	// Errors lists every read that failed. A failed read never stops the
 	// collection; it is recorded here and collect moves on.
 	Errors []CollectError `json:"errors"`
@@ -143,6 +149,58 @@ type Usage struct {
 type ServiceAccountRef struct {
 	Name  string `json:"name"`
 	State string `json:"state"` // Found, Missing or Unreadable
+}
+
+// PVC is a PersistentVolumeClaim: the pod's request for a disk.
+type PVC struct {
+	Name   string   `json:"name"`
+	State  string   `json:"state"`  // Found, Missing or Unreadable
+	UsedBy []string `json:"usedBy"` // the pod volume names that mount it
+
+	Phase string `json:"phase,omitempty"` // Pending, Bound or Lost
+
+	// StorageClassName is the class it asks for. When the PVC doesn't name
+	// one, UsesDefaultClass is true and the cluster's default class applies.
+	StorageClassName string `json:"storageClassName,omitempty"`
+	UsesDefaultClass bool   `json:"usesDefaultClass,omitempty"`
+
+	VolumeName  string      `json:"volumeName,omitempty"` // the PV it's bound to
+	Requested   string      `json:"requested,omitempty"`  // e.g. "1Gi"
+	Capacity    string      `json:"capacity,omitempty"`   // what it actually got
+	AccessModes []string    `json:"accessModes,omitempty"`
+	Conditions  []Condition `json:"conditions,omitempty"`
+}
+
+// PV is a PersistentVolume: an actual disk.
+type PV struct {
+	Name             string   `json:"name"`
+	State            string   `json:"state"`
+	Phase            string   `json:"phase,omitempty"` // Available, Bound, Released, Failed
+	Reason           string   `json:"reason,omitempty"`
+	Message          string   `json:"message,omitempty"`
+	StorageClassName string   `json:"storageClassName,omitempty"`
+	Capacity         string   `json:"capacity,omitempty"`
+	AccessModes      []string `json:"accessModes,omitempty"`
+	ReclaimPolicy    string   `json:"reclaimPolicy,omitempty"`
+	ClaimRef         string   `json:"claimRef,omitempty"` // "namespace/name" of the PVC holding it
+}
+
+// StorageClass describes how disks of one kind are created.
+type StorageClass struct {
+	Name              string `json:"name"`
+	State             string `json:"state"`
+	Provisioner       string `json:"provisioner,omitempty"`       // who creates the disks
+	VolumeBindingMode string `json:"volumeBindingMode,omitempty"` // Immediate or WaitForFirstConsumer
+	ReclaimPolicy     string `json:"reclaimPolicy,omitempty"`
+	IsDefault         bool   `json:"isDefault,omitempty"`
+}
+
+// Condition is a generic status condition.
+type Condition struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // CollectError records one read that failed.
