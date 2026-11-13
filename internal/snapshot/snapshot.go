@@ -32,6 +32,14 @@ type Snapshot struct {
 	// placed on one yet (a Pending pod: the nodes explain why).
 	Nodes []Node `json:"nodes"`
 
+	// Secrets and ConfigMaps the pod uses, sorted by name. Only names and
+	// key names are kept, never values.
+	Secrets    []Reference `json:"secrets"`
+	ConfigMaps []Reference `json:"configMaps"`
+
+	// ServiceAccount is the account the pod runs as.
+	ServiceAccount *ServiceAccountRef `json:"serviceAccount,omitempty"`
+
 	// Errors lists every read that failed. A failed read never stops the
 	// collection; it is recorded here and collect moves on.
 	Errors []CollectError `json:"errors"`
@@ -96,6 +104,45 @@ type NodeCondition struct {
 	Status  string `json:"status"` // "True", "False" or "Unknown"
 	Reason  string `json:"reason,omitempty"`
 	Message string `json:"message,omitempty"`
+}
+
+// Lookup results for an object the pod refers to.
+const (
+	Found      = "found"      // it exists
+	Missing    = "missing"    // the API server says it doesn't exist (evidence)
+	Unreadable = "unreadable" // the read failed; see Snapshot.Errors
+)
+
+// Reference is a Secret or ConfigMap the pod uses.
+type Reference struct {
+	Name  string `json:"name"`
+	State string `json:"state"` // Found, Missing or Unreadable
+
+	// Keys are the key NAMES the object holds (only when Found). Values
+	// are never collected.
+	Keys []string `json:"keys,omitempty"`
+
+	// Type is the Secret's type, e.g. "Opaque" or
+	// "kubernetes.io/dockerconfigjson". Empty for ConfigMaps.
+	Type string `json:"type,omitempty"`
+
+	// UsedBy lists every place in the pod spec that refers to it.
+	UsedBy []Usage `json:"usedBy"`
+}
+
+// Usage is one place in the pod spec that refers to a Secret or ConfigMap.
+type Usage struct {
+	Via       string   `json:"via"`                 // "env", "envFrom", "volume", "projected", "imagePullSecrets"
+	Container string   `json:"container,omitempty"` // for env / envFrom
+	Name      string   `json:"name,omitempty"`      // env var or volume name
+	Keys      []string `json:"keys,omitempty"`      // the keys it asks for, if specific
+	Optional  bool     `json:"optional,omitempty"`  // the pod still starts without it
+}
+
+// ServiceAccountRef is the service account the pod runs as.
+type ServiceAccountRef struct {
+	Name  string `json:"name"`
+	State string `json:"state"` // Found, Missing or Unreadable
 }
 
 // CollectError records one read that failed.

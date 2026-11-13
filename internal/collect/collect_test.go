@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/yaml"
@@ -70,7 +71,7 @@ func (f fakeLogs) fetch(_ context.Context, _ string, pod string, opts *corev1.Po
 
 func collectFor(t *testing.T, podName string, logs fakeLogs) *snapshot.Snapshot {
 	t.Helper()
-	c := New(fake.NewSimpleClientset(loadPod(t, podName), loadNode(t, "culprit-control-plane")))
+	c := New(fake.NewSimpleClientset(append([]runtime.Object{loadPod(t, podName)}, realClusterObjects(t)...)...))
 	c.FetchLogs = logs.fetch
 	snap, err := c.Collect(context.Background(), ns, podName)
 	if err != nil {
@@ -163,7 +164,18 @@ func TestCollect_SecretAPI(t *testing.T) {
 	if !strings.Contains(w.Message, "db-credentials") {
 		t.Errorf("waiting message = %q, want it to name db-credentials", w.Message)
 	}
-	// TODO(refs step): Secret db-credentials marked as missing.
+	// Secret db-credentials marked as missing, with where the pod uses it.
+	if len(snap.Secrets) != 1 {
+		t.Fatalf("secrets = %+v, want only db-credentials", snap.Secrets)
+	}
+	s := snap.Secrets[0]
+	if s.Name != "db-credentials" || s.State != snapshot.Missing {
+		t.Errorf("secret = %s/%s, want db-credentials/missing", s.Name, s.State)
+	}
+	if len(s.UsedBy) != 1 || s.UsedBy[0].Via != "env" || s.UsedBy[0].Name != "DB_PASSWORD" ||
+		s.UsedBy[0].Container != "python-api" || len(s.UsedBy[0].Keys) != 1 || s.UsedBy[0].Keys[0] != "password" {
+		t.Errorf("usedBy = %+v, want env DB_PASSWORD in python-api asking for key password", s.UsedBy)
+	}
 }
 
 func TestCollect_MemoryAPI(t *testing.T) {
