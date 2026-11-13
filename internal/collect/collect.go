@@ -61,11 +61,13 @@ func (c *Collector) Collect(ctx context.Context, ns, name string) (*snapshot.Sna
 		Pod:         pod,
 		Logs:        map[string]snapshot.ContainerLogs{},
 		Events:      []snapshot.Event{},
+		Nodes:       []snapshot.Node{},
 		Errors:      []snapshot.CollectError{},
 	}
 
 	c.collectLogs(ctx, snap)
 	c.collectEvents(ctx, snap)
+	c.collectNodes(ctx, snap)
 
 	return snap, nil
 }

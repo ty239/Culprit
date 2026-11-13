@@ -28,6 +28,10 @@ type Snapshot struct {
 	// not mean nothing happened; Pod.Status is the lasting record.
 	Events []Event `json:"events"`
 
+	// Nodes holds the pod's node, or every node when the pod hasn't been
+	// placed on one yet (a Pending pod: the nodes explain why).
+	Nodes []Node `json:"nodes"`
+
 	// Errors lists every read that failed. A failed read never stops the
 	// collection; it is recorded here and collect moves on.
 	Errors []CollectError `json:"errors"`
@@ -57,6 +61,41 @@ type Event struct {
 	LastSeen  time.Time `json:"lastSeen,omitzero"`   // when it last happened
 	Source    string    `json:"source,omitempty"`    // who reported it, e.g. "kubelet"
 	FieldPath string    `json:"fieldPath,omitempty"` // which part of the pod, e.g. "spec.containers{python-api}"
+}
+
+// Node is the API server's record of one machine that runs pods.
+type Node struct {
+	Name string `json:"name"`
+
+	// Missing is true when the pod names this node but the node no longer
+	// exists. That's evidence, not a collect failure.
+	Missing bool `json:"missing,omitempty"`
+
+	// Allocatable is what pods can actually use; Capacity is the machine's
+	// total. e.g. {"cpu": "16", "memory": "10182740Ki", "pods": "110"}
+	Allocatable corev1.ResourceList `json:"allocatable,omitempty"`
+	Capacity    corev1.ResourceList `json:"capacity,omitempty"`
+
+	Conditions    []NodeCondition   `json:"conditions,omitempty"` // Ready, MemoryPressure, DiskPressure, ...
+	Unschedulable bool              `json:"unschedulable,omitempty"`
+	Taints        []corev1.Taint    `json:"taints,omitempty"` // rules that keep pods off this node
+	Labels        map[string]string `json:"labels,omitempty"` // what nodeSelector / affinity match on
+
+	// Images are the image names already on the node, e.g.
+	// "docker.io/library/python:3.12-slim".
+	Images []string `json:"images,omitempty"`
+
+	// ImagesMayBeIncomplete is true when the list hit the kubelet's limit
+	// (50 by default), so an image missing from it may still be on the node.
+	ImagesMayBeIncomplete bool `json:"imagesMayBeIncomplete,omitempty"`
+}
+
+// NodeCondition is one health check the kubelet reports for its node.
+type NodeCondition struct {
+	Type    string `json:"type"`   // e.g. "Ready", "MemoryPressure"
+	Status  string `json:"status"` // "True", "False" or "Unknown"
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // CollectError records one read that failed.

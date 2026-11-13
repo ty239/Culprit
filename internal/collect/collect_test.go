@@ -70,7 +70,7 @@ func (f fakeLogs) fetch(_ context.Context, _ string, pod string, opts *corev1.Po
 
 func collectFor(t *testing.T, podName string, logs fakeLogs) *snapshot.Snapshot {
 	t.Helper()
-	c := New(fake.NewSimpleClientset(loadPod(t, podName)))
+	c := New(fake.NewSimpleClientset(loadPod(t, podName), loadNode(t, "culprit-control-plane")))
 	c.FetchLogs = logs.fetch
 	snap, err := c.Collect(context.Background(), ns, podName)
 	if err != nil {
@@ -121,7 +121,19 @@ func TestCollect_UserAPI(t *testing.T) {
 	if snap.Logs["python-api"].Current.Unavailable == "" {
 		t.Error("current log should be marked unavailable")
 	}
-	// TODO(nodes step): the node's image list, without my-python-app:1.0.
+	// The node's image list, without my-python-app:1.0.
+	if len(snap.Nodes) != 1 || snap.Nodes[0].Name != "culprit-control-plane" {
+		t.Fatalf("nodes = %v, want only culprit-control-plane", nodeNames(snap))
+	}
+	imgs := snap.Nodes[0].Images
+	if len(imgs) == 0 {
+		t.Fatal("node image list is empty")
+	}
+	for _, img := range imgs {
+		if strings.Contains(img, "my-python-app") {
+			t.Errorf("image list should not contain my-python-app, found %q", img)
+		}
+	}
 }
 
 func TestCollect_CrashAPI(t *testing.T) {
@@ -188,7 +200,17 @@ func TestCollect_PendingAPI(t *testing.T) {
 	if cpu.Cmp(resource.MustParse("100")) != 0 {
 		t.Errorf("cpu request = %s, want 100", cpu.String())
 	}
-	// TODO(nodes step): the node's 16 allocatable CPUs.
+	// No node yet, so every node is collected, with its 16 allocatable CPUs.
+	if snap.Pod.Spec.NodeName != "" {
+		t.Fatalf("pending-api should have no node, has %q", snap.Pod.Spec.NodeName)
+	}
+	if len(snap.Nodes) != 1 {
+		t.Fatalf("nodes = %v, want the cluster's one node", nodeNames(snap))
+	}
+	alloc := snap.Nodes[0].Allocatable[corev1.ResourceCPU]
+	if alloc.Cmp(resource.MustParse("16")) != 0 {
+		t.Errorf("node allocatable cpu = %s, want 16", alloc.String())
+	}
 }
 
 // --- Rules ------------------------------------------------------------------
