@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -84,6 +85,11 @@ func (c *Collector) readLog(ctx context.Context, fetch LogFetcher, snap *snapsho
 	case err == nil:
 		if text == "" {
 			return snapshot.Log{Unavailable: "log is empty"}
+		}
+		// When the runtime has already deleted an old container, the kubelet
+		// answers 200 with this sentence as the body. It isn't app output.
+		if strings.HasPrefix(text, "unable to retrieve container logs for ") {
+			return snapshot.Log{Unavailable: strings.TrimSpace(text)}
 		}
 		return snapshot.Log{Text: text}
 
