@@ -90,6 +90,13 @@ type Node struct {
 	Allocatable corev1.ResourceList `json:"allocatable,omitempty"`
 	Capacity    corev1.ResourceList `json:"capacity,omitempty"`
 
+	// Requested is what the pods already on the node have asked for (cpu
+	// and memory), and PodCount is how many of them there are. Allocatable
+	// minus Requested is the room left for a new pod. Only collected when
+	// the pod hasn't been placed; nil when it wasn't collected.
+	Requested corev1.ResourceList `json:"requested,omitempty"`
+	PodCount  int                 `json:"podCount,omitempty"`
+
 	Conditions    []NodeCondition   `json:"conditions,omitempty"` // Ready, MemoryPressure, DiskPressure, ...
 	Unschedulable bool              `json:"unschedulable,omitempty"`
 	Taints        []corev1.Taint    `json:"taints,omitempty"` // rules that keep pods off this node
