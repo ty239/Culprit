@@ -1,0 +1,272 @@
+{
+  "collectedAt": "2026-11-14T18:03:11.277561Z",
+  "context": "kind-culprit",
+  "namespace": "default",
+  "podName": "pending-api",
+  "pod": {
+    "metadata": {
+      "name": "pending-api",
+      "namespace": "default",
+      "uid": "53ed907b-5889-4ab0-856d-fb29332f069f",
+      "resourceVersion": "102380",
+      "creationTimestamp": "2026-11-04T03:27:28Z",
+      "labels": {
+        "app": "pending-api",
+        "environment": "development"
+      },
+      "annotations": {
+        "description": "Python app that asks for more CPU than any node has"
+      }
+    },
+    "spec": {
+      "volumes": [
+        {
+          "name": "kube-api-access-ns8s4",
+          "projected": {
+            "sources": [
+              {
+                "serviceAccountToken": {
+                  "expirationSeconds": 3607,
+                  "path": "token"
+                }
+              },
+              {
+                "configMap": {
+                  "name": "kube-root-ca.crt",
+                  "items": [
+                    {
+                      "key": "ca.crt",
+                      "path": "ca.crt"
+                    }
+                  ]
+                }
+              },
+              {
+                "downwardAPI": {
+                  "items": [
+                    {
+                      "path": "namespace",
+                      "fieldRef": {
+                        "apiVersion": "v1",
+                        "fieldPath": "metadata.namespace"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "defaultMode": 420
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "python-api",
+          "image": "python:3.12-slim",
+          "command": [
+            "python",
+            "-m",
+            "http.server",
+            "8000"
+          ],
+          "ports": [
+            {
+              "containerPort": 8000,
+              "protocol": "TCP"
+            }
+          ],
+          "resources": {
+            "requests": {
+              "cpu": "100"
+            }
+          },
+          "volumeMounts": [
+            {
+              "name": "kube-api-access-ns8s4",
+              "readOnly": true,
+              "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
+            }
+          ],
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "imagePullPolicy": "IfNotPresent"
+        }
+      ],
+      "restartPolicy": "Always",
+      "terminationGracePeriodSeconds": 30,
+      "dnsPolicy": "ClusterFirst",
+      "serviceAccountName": "default",
+      "serviceAccount": "default",
+      "securityContext": {},
+      "schedulerName": "default-scheduler",
+      "tolerations": [
+        {
+          "key": "node.kubernetes.io/not-ready",
+          "operator": "Exists",
+          "effect": "NoExecute",
+          "tolerationSeconds": 300
+        },
+        {
+          "key": "node.kubernetes.io/unreachable",
+          "operator": "Exists",
+          "effect": "NoExecute",
+          "tolerationSeconds": 300
+        }
+      ],
+      "priority": 0,
+      "enableServiceLinks": true,
+      "preemptionPolicy": "PreemptLowerPriority"
+    },
+    "status": {
+      "phase": "Pending",
+      "conditions": [
+        {
+          "type": "PodScheduled",
+          "status": "False",
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-11-04T03:27:28Z",
+          "reason": "Unschedulable",
+          "message": "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod."
+        }
+      ],
+      "qosClass": "Burstable"
+    }
+  },
+  "logs": {
+    "python-api": {
+      "current": {
+        "unavailable": "log is empty"
+      },
+      "previous": {
+        "unavailable": "container has not restarted"
+      }
+    }
+  },
+  "events": [
+    {
+      "type": "Warning",
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+      "count": 466,
+      "firstSeen": "2026-11-04T03:27:28Z",
+      "lastSeen": "2026-11-14T01:13:33Z",
+      "source": "default-scheduler"
+    },
+    {
+      "type": "Warning",
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+      "count": 2,
+      "firstSeen": "2026-11-14T17:56:35.066272Z",
+      "lastSeen": "2026-11-14T18:01:35.029997Z",
+      "source": "default-scheduler"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "culprit-control-plane",
+      "allocatable": {
+        "cpu": "16",
+        "ephemeral-storage": "1055762868Ki",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "10182740Ki",
+        "pods": "110"
+      },
+      "capacity": {
+        "cpu": "16",
+        "ephemeral-storage": "1055762868Ki",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "10182740Ki",
+        "pods": "110"
+      },
+      "conditions": [
+        {
+          "type": "MemoryPressure",
+          "status": "False",
+          "reason": "KubeletHasSufficientMemory",
+          "message": "kubelet has sufficient memory available"
+        },
+        {
+          "type": "DiskPressure",
+          "status": "False",
+          "reason": "KubeletHasNoDiskPressure",
+          "message": "kubelet has no disk pressure"
+        },
+        {
+          "type": "PIDPressure",
+          "status": "False",
+          "reason": "KubeletHasSufficientPID",
+          "message": "kubelet has sufficient PID available"
+        },
+        {
+          "type": "Ready",
+          "status": "True",
+          "reason": "KubeletReady",
+          "message": "kubelet is posting ready status"
+        }
+      ],
+      "labels": {
+        "beta.kubernetes.io/arch": "amd64",
+        "beta.kubernetes.io/os": "linux",
+        "kubernetes.io/arch": "amd64",
+        "kubernetes.io/hostname": "culprit-control-plane",
+        "kubernetes.io/os": "linux",
+        "node-role.kubernetes.io/control-plane": ""
+      },
+      "images": [
+        "docker.io/kindest/kindnetd:v20240813-c6f155d6",
+        "docker.io/kindest/local-path-helper:v20230510-486859a6",
+        "docker.io/kindest/local-path-provisioner:v20240813-c6f155d6",
+        "docker.io/library/import-2024-08-13@sha256:881959dffed0c747196d62ab29e6d5fe1f750b709b9703db47565afa0b6acec0",
+        "docker.io/library/import-2024-08-13@sha256:a4448b721006ab075a7142efcd329383db5b80a19c930f7fbf58cf6e2df1eb1b",
+        "docker.io/library/import-2024-08-13@sha256:eb4760466bf0dea0ed0a6557780dfdfb8a26bfe22302a9c023c1a45fc315ee03",
+        "docker.io/library/import-2024-08-13@sha256:fb36548b322947288048097367669a4c44acb7bcd0475659bfd788924efdc043",
+        "docker.io/library/nginx:latest",
+        "docker.io/library/nginx@sha256:165ddde8751e75a1c907d24ef10d9f6deb08b57e0fe56caf67512486aff76d82",
+        "docker.io/library/nginx@sha256:5ab5b0b01097420873a3f3330f44248e34a3c2a3e8d5ee30658aeae8cb7435da",
+        "docker.io/library/python:3.12-slim",
+        "docker.io/library/python@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30",
+        "registry.k8s.io/coredns/coredns:v1.11.1",
+        "registry.k8s.io/etcd:3.5.15-0",
+        "registry.k8s.io/kube-apiserver-amd64:v1.31.0",
+        "registry.k8s.io/kube-apiserver:v1.31.0",
+        "registry.k8s.io/kube-controller-manager-amd64:v1.31.0",
+        "registry.k8s.io/kube-controller-manager:v1.31.0",
+        "registry.k8s.io/kube-proxy-amd64:v1.31.0",
+        "registry.k8s.io/kube-proxy:v1.31.0",
+        "registry.k8s.io/kube-scheduler-amd64:v1.31.0",
+        "registry.k8s.io/kube-scheduler:v1.31.0",
+        "registry.k8s.io/pause:3.10"
+      ]
+    }
+  ],
+  "secrets": [],
+  "configMaps": [
+    {
+      "name": "kube-root-ca.crt",
+      "state": "found",
+      "keys": [
+        "ca.crt"
+      ],
+      "usedBy": [
+        {
+          "via": "projected",
+          "name": "kube-api-access-ns8s4",
+          "keys": [
+            "ca.crt"
+          ]
+        }
+      ]
+    }
+  ],
+  "serviceAccount": {
+    "name": "default",
+    "state": "found"
+  },
+  "pvcs": [],
+  "pvs": [],
+  "storageClasses": [],
+  "errors": []
+}
