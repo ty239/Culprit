@@ -286,6 +286,24 @@ func TestCollect_NoPreviousRequestWithoutRestart(t *testing.T) {
 	}
 }
 
+// Seen on the real cluster: once the runtime has deleted the previous
+// container, the kubelet returns this sentence as the "log". It must not be
+// stored as if the app had printed it.
+func TestCollect_DeletedContainerLogIsUnavailable(t *testing.T) {
+	const gone = "unable to retrieve container logs for containerd://dd8255aa0124\n"
+	snap := collectFor(t, "crash-api", fakeLogs{
+		"crash-api/python-api/current":  "/usr/local/bin/python: No module named uvicorn\n",
+		"crash-api/python-api/previous": gone,
+	})
+	prev := snap.Logs["python-api"].Previous
+	if prev.Text != "" || !strings.HasPrefix(prev.Unavailable, "unable to retrieve container logs") {
+		t.Errorf("previous = %+v, want it marked unavailable", prev)
+	}
+	if snap.Logs["python-api"].Current.Text == "" {
+		t.Error("current log should be kept")
+	}
+}
+
 func TestCollect_DropsBookkeepingFields(t *testing.T) {
 	snap := collectFor(t, "crash-api", fakeLogs{})
 	if _, ok := snap.Pod.Annotations["kubectl.kubernetes.io/last-applied-configuration"]; ok {
