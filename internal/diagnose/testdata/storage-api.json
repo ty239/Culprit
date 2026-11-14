@@ -1,5 +1,5 @@
 {
-  "collectedAt": "2026-11-14T18:03:11.3887089Z",
+  "collectedAt": "2026-11-14T18:27:41.0764839Z",
   "context": "kind-culprit",
   "namespace": "default",
   "podName": "storage-api",
@@ -162,9 +162,9 @@
       "type": "Warning",
       "reason": "FailedScheduling",
       "message": "0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
-      "count": 2,
+      "count": 6,
       "firstSeen": "2026-11-14T17:56:35.066709Z",
-      "lastSeen": "2026-11-14T18:01:35.030248Z",
+      "lastSeen": "2026-11-14T18:21:34.937351Z",
       "source": "default-scheduler"
     }
   ],
@@ -187,6 +187,11 @@
         "memory": "10182740Ki",
         "pods": "110"
       },
+      "requested": {
+        "cpu": "950m",
+        "memory": "322Mi"
+      },
+      "podCount": 16,
       "conditions": [
         {
           "type": "MemoryPressure",

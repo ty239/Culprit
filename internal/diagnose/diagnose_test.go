@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/culprit/culprit/internal/snapshot"
@@ -213,6 +214,108 @@ func TestDiagnose_StorageAPI(t *testing.T) {
 	wantContains(t, "root evidence", evidenceText(d, r), "storageClasses[fast-ssd].state = missing")
 }
 
+// Big enough when empty, but the pods already on the node leave too little.
+func TestDiagnose_FullAPI(t *testing.T) {
+	d := diagnosed(t, load(t, "full-api"))
+	if got := chainOf(d); got != "symptom>rootCause" {
+		t.Fatalf("chain = %s\n%s", got, d)
+	}
+	r := root(t, d)
+	if r.Object != "Node culprit-control-plane" {
+		t.Errorf("root object = %q", r.Object)
+	}
+	wantContains(t, "root summary", r.Summary, "15500m cpu", "already requested")
+	wantContains(t, "root evidence", evidenceText(d, r),
+		"resources.requests.cpu = 15500m", "nodes[culprit-control-plane].allocatable.cpu = 16", "nodes[culprit-control-plane].requested.cpu")
+}
+
+func TestDiagnose_SelectorAPI(t *testing.T) {
+	d := diagnosed(t, load(t, "selector-api"))
+	if got := chainOf(d); got != "symptom>rootCause" {
+		t.Fatalf("chain = %s\n%s", got, d)
+	}
+	r := root(t, d)
+	wantContains(t, "root summary", r.Summary, "nodeSelector", "disk=ssd")
+	wantContains(t, "root evidence", evidenceText(d, r), "nodes[culprit-control-plane].labels = disk is not set")
+}
+
+// The app is healthy; its liveness probe is what's wrong. The pod even
+// shows Running and ready between kills.
+func TestDiagnose_ProbeAPI(t *testing.T) {
+	snap := load(t, "probe-api")
+	d := diagnosed(t, snap)
+	if d.Healthy {
+		t.Fatal("a pod the kubelet keeps killing is not healthy")
+	}
+	if got := chainOf(d); got != "symptom>cause>rootCause" {
+		t.Fatalf("chain = %s\n%s", got, d)
+	}
+	wantContains(t, "symptom", d.Findings[0].Summary, "keeps being restarted")
+	wantContains(t, "cause", d.Findings[1].Summary, "liveness probe fails")
+	r := root(t, d)
+	wantContains(t, "root summary", r.Summary, "GET :8000/healthz", "404")
+	// The access log's last line is not the cause.
+	if strings.Contains(r.Summary, "The app fails with") {
+		t.Errorf("root cause should be the probe, not the app's log: %s", r.Summary)
+	}
+
+	// Rule 2: once the events have expired, nothing proves the probe did it.
+	snap.Events = []snapshot.Event{}
+	snap.Pod.Status.ContainerStatuses[0].State = corev1.ContainerState{
+		Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+	}
+	d = diagnosed(t, snap)
+	if len(d.RootCauses) != 0 {
+		t.Errorf("want no root cause without events, got:\n%s", d)
+	}
+	wantContains(t, "cause", d.Findings[1].Summary, "liveness probe", "may be")
+}
+
+func TestDiagnose_EvictedAPI(t *testing.T) {
+	snap := load(t, "evicted-api")
+	d := diagnosed(t, snap)
+	// One chain: the container's exit code 137 is part of the eviction.
+	if got := chainOf(d); got != "symptom>rootCause" {
+		t.Fatalf("chain = %s\n%s", got, d)
+	}
+	wantContains(t, "symptom", d.Findings[0].Summary, "evicted")
+	r := root(t, d)
+	wantContains(t, "root summary", r.Summary, "local disk", "10Mi")
+	wantContains(t, "root evidence", evidenceText(d, r), "resources.limits.ephemeral-storage = 10Mi")
+
+	// Stored on the pod, so it survives the events expiring.
+	snap.Events = []snapshot.Event{}
+	wantContains(t, "root summary", root(t, diagnosed(t, snap)).Summary, "10Mi")
+}
+
+func TestDiagnose_EvictedForNodePressure(t *testing.T) {
+	snap := load(t, "evicted-api")
+	snap.Pod.Status.Message = "The node was low on resource: memory. Threshold quantity: 100Mi, available: 60Mi."
+	snap.Nodes[0].Conditions = append(snap.Nodes[0].Conditions,
+		snapshot.NodeCondition{Type: "MemoryPressure", Status: "True", Message: "kubelet has insufficient memory available"})
+
+	d := diagnosed(t, snap)
+	r := root(t, d)
+	if r.Object != "Node culprit-control-plane" {
+		t.Errorf("root object = %q", r.Object)
+	}
+	wantContains(t, "root summary", r.Summary, "ran low on memory")
+	wantContains(t, "root evidence", evidenceText(d, r), "conditions[MemoryPressure]")
+}
+
+// A real init container that fails: one chain, about the init container.
+func TestDiagnose_InitAPI(t *testing.T) {
+	d := diagnosed(t, load(t, "init-api"))
+	if !strings.HasPrefix(d.Status, "Init:") {
+		t.Errorf("status = %q, want Init:...", d.Status)
+	}
+	if got := chainOf(d); got != "symptom>cause>rootCause" {
+		t.Fatalf("chain = %s\n%s", got, d)
+	}
+	wantContains(t, "symptom", d.Findings[0].Summary, `"migrate"`)
+	wantContains(t, "root summary", root(t, d).Summary, "migration failed: cannot reach database")
+}
+
 // Rule 6: running and ready is healthy, even with a restart in the past.
 func TestDiagnose_HealthyPod(t *testing.T) {
 	snap := load(t, "my-app")
@@ -232,7 +335,8 @@ func TestDiagnose_HealthyPod(t *testing.T) {
 
 // Rule 3: events expire. The answer must not change when they are gone.
 func TestDiagnose_SameRootCauseWithoutEvents(t *testing.T) {
-	for _, name := range []string{"user-api", "crash-api", "secret-api", "memory-api", "pending-api", "storage-api"} {
+	for _, name := range []string{"user-api", "crash-api", "secret-api", "memory-api", "pending-api", "storage-api",
+		"full-api", "selector-api", "evicted-api", "init-api"} {
 		t.Run(name, func(t *testing.T) {
 			snap := load(t, name)
 			want := root(t, diagnosed(t, snap))
@@ -360,11 +464,29 @@ func TestDiagnose_UnknownSchedulingReasonHasNoRootCause(t *testing.T) {
 func TestDiagnose_RequestThatFitsIsNotBlamedOnNodeSize(t *testing.T) {
 	snap := load(t, "pending-api")
 	snap.Pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = snap.Nodes[0].Allocatable[corev1.ResourceCPU]
+
+	// With the other pods' requests in the snapshot, they are the answer.
+	r := root(t, diagnosed(t, snap))
+	if r.Object != "Node culprit-control-plane" {
+		t.Errorf("root object = %q, want the node", r.Object)
+	}
+
+	// Without them (an older snapshot, or the pod list was denied): no guess.
+	snap.Nodes[0].Requested = nil
 	d := diagnosed(t, snap)
 	if len(d.RootCauses) != 0 {
 		t.Fatalf("want no root cause, got:\n%s", d)
 	}
 	wantContains(t, "cause", d.Findings[1].Summary, "other pods")
+}
+
+// The request fits next to the other pods too, so cpu isn't what blocks it.
+func TestDiagnose_RequestThatFitsInTheRoomLeft(t *testing.T) {
+	snap := load(t, "full-api")
+	snap.Pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("2")
+	if d := diagnosed(t, snap); len(d.RootCauses) != 0 {
+		t.Errorf("want no root cause, got:\n%s", d)
+	}
 }
 
 // Rule 7: failed reads are listed.

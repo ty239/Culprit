@@ -122,3 +122,144 @@ spec:
     - name: data
       persistentVolumeClaim:
         claimName: storage-api-data
+---
+# Broken on purpose: the app builds a 200MB string, but its memory limit is 64Mi, so the
+# kernel kills it every time it starts (OOMKilled, then CrashLoopBackOff).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-api
+  labels:
+    app: memory-api
+    environment: development
+  annotations:
+    description: "Python app that uses more memory than it is allowed"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-c", "data = 'x' * (200 * 1024 * 1024); import time; time.sleep(3600)"]
+      resources:
+        requests:
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the app itself is fine, but its liveness probe asks for /healthz,
+# which the app doesn't have (404), so Kubernetes keeps killing and restarting a healthy
+# container.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe-api
+  labels:
+    app: probe-api
+    environment: development
+  annotations:
+    description: "Python app with a liveness probe that points at a page that doesn't exist"
+spec:
+  terminationGracePeriodSeconds: 5
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 8000
+        initialDelaySeconds: 3
+        periodSeconds: 5
+        failureThreshold: 2
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the app writes a 50MB file to its own disk, but it is only allowed
+# 10Mi of local disk, so the kubelet evicts the whole pod (Failed, reason Evicted).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: evicted-api
+  labels:
+    app: evicted-api
+    environment: development
+  annotations:
+    description: "Python app that fills more local disk than it is allowed"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["sh", "-c", "dd if=/dev/zero of=/tmp/cache.bin bs=1M count=50 && sleep 3600"]
+      resources:
+        limits:
+          ephemeral-storage: 10Mi
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: asks for 15.5 CPUs. The node has 16, so it would fit on an empty
+# node, but the pods already running have requested about 1 CPU between them, so there
+# isn't enough left (FailedScheduling: Insufficient cpu).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: full-api
+  labels:
+    app: full-api
+    environment: development
+  annotations:
+    description: "Python app that asks for more CPU than the node has left"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      resources:
+        requests:
+          cpu: 15500m
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: only wants to run on a node labelled disk=ssd, and no node has that
+# label (FailedScheduling: node(s) didn't match Pod's node affinity/selector).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: selector-api
+  labels:
+    app: selector-api
+    environment: development
+  annotations:
+    description: "Python app that asks for a node label no node has"
+spec:
+  nodeSelector:
+    disk: ssd
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      ports:
+        - containerPort: 8000
+---
+# Broken on purpose: the init container (a database migration) fails every time, so the
+# app container is never started (Init:Error, then Init:CrashLoopBackOff).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-api
+  labels:
+    app: init-api
+    environment: development
+  annotations:
+    description: "Python app whose init container always fails"
+spec:
+  initContainers:
+    - name: migrate
+      image: python:3.12-slim
+      command: ["sh", "-c", "echo 'migration failed: cannot reach database db:5432' >&2; exit 1"]
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      ports:
+        - containerPort: 8000

@@ -50,10 +50,11 @@ Each rule looks for one symptom, then follows it down.
 
 | Symptom | How to follow the chain | Test pod |
 |---|---|---|
-| **Pod not scheduled** (`PodScheduled` is `False`) | 1. A PVC is missing, or `Pending` → its StorageClass is missing / there is no default class. 2. The scheduler says `Insufficient X` → compare the pod's request with the biggest node's allocatable. 3. The scheduler mentions a node selector, a taint, or a cordoned node → compare with the nodes' labels and taints | `storage-api`, `pending-api` |
+| **Pod not scheduled** (`PodScheduled` is `False`) | 1. A PVC is missing, or `Pending` → its StorageClass is missing / there is no default class. 2. The scheduler says `Insufficient X` → compare the pod's request with the biggest node's allocatable, then with what the pods already on the node have left over. 3. The scheduler mentions a node selector, a taint, or a cordoned node → compare with the nodes' labels and taints | `storage-api`, `pending-api`, `full-api`, `selector-api` |
+| **Pod evicted** (phase `Failed`, reason `Evicted`) | The kubelet's message: a disk limit the pod went over → that limit; a node low on a resource → the node | `evicted-api` |
 | **Image can't be pulled** (`ErrImagePull`, `ImagePullBackOff`, `InvalidImageName`) | A missing `imagePullSecret` → that Secret. Otherwise the image itself: the pull error, and whether the image is on the node | `user-api` |
 | **Container blocked before starting** (`CreateContainerConfigError`, or stuck in `ContainerCreating`) | A Secret or ConfigMap it needs is missing, or exists without the key it asks for | `secret-api` |
-| **Container keeps crashing** (`CrashLoopBackOff`, or terminated with a non-zero exit code) | Last termination is `OOMKilled` → the memory limit. Otherwise → the exit code → the last line the app logged | `memory-api`, `crash-api` |
+| **Container keeps crashing** (`CrashLoopBackOff`, or terminated with a non-zero exit code) | Last termination is `OOMKilled` → the memory limit. Force-stopped (exit `137` / `143`) with a liveness probe, and a `Killing` event that says so → the probe. Otherwise → the exit code → the last line the app logged | `memory-api`, `probe-api`, `crash-api`, `init-api` |
 | **Container can't be started** (`RunContainerError`, `CreateContainerError`, `StartError`) | The runtime's message, e.g. a command that isn't in the image | |
 | **Running but not ready** | Reported as a symptom, with the kubelet's `Unhealthy` event if there is one | |
 
@@ -107,6 +108,11 @@ For each test pod, diagnosing a snapshot taken from the real `kind-culprit` clus
 | `memory-api` | Container keeps crashing | Killed for memory: the `64Mi` limit is too low |
 | `pending-api` | Pod can't be scheduled | Asks for `100` CPUs, the biggest node has `16` |
 | `storage-api` | Pod can't be scheduled | PVC `storage-api-data` is `Pending` because StorageClass `fast-ssd` doesn't exist |
+| `full-api` | Pod can't be scheduled | Asks for `15500m` CPU; the node has `16`, but the pods already on it leave less than that |
+| `selector-api` | Pod can't be scheduled | No node has the label `disk=ssd` that its nodeSelector asks for |
+| `probe-api` | Container keeps being restarted | The kubelet kills it: its liveness probe (`GET :8000/healthz`) gets a `404` |
+| `evicted-api` | Pod was evicted | Wrote more to its local disk than its `10Mi` ephemeral-storage limit |
+| `init-api` | Init container `migrate` keeps crashing | It fails with `migration failed: cannot reach database db:5432` |
 | `my-app` (healthy) | none | none |
 
 Tests read those snapshots from `internal/diagnose/testdata/`, so they run without a cluster.
@@ -115,8 +121,11 @@ Tests read those snapshots from `internal/diagnose/testdata/`, so they run witho
 
 ## Not yet
 
-- Liveness probes that kill a healthy container
-- Evicted pods and node pressure
-- "The nodes are big enough, but other pods have used the space" (needs the other pods' requests,
-  which collect doesn't gather yet)
-- Init containers get the same rules as normal containers, but there is no test pod for them
+- Taints and cordoned nodes have rules, but no test pod: making one means tainting the cluster's
+  only node
+- Evicted because the *node* ran low (memory or disk pressure) has a rule, but no test pod
+- Readiness probes: a pod that is running but never ready is reported as a symptom only
+- A liveness probe is only blamed while the kubelet's `Killing` event is still there (about an
+  hour). After that the chain stops at "was force-stopped"
+- A PVC stuck `Pending` behind a provisioner that isn't working (needs the PVC's own events, which
+  collect doesn't gather)

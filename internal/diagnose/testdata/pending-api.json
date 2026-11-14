@@ -1,5 +1,5 @@
 {
-  "collectedAt": "2026-11-14T18:03:11.277561Z",
+  "collectedAt": "2026-11-14T18:27:40.9423129Z",
   "context": "kind-culprit",
   "namespace": "default",
   "podName": "pending-api",
@@ -156,9 +156,9 @@
       "type": "Warning",
       "reason": "FailedScheduling",
       "message": "0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
-      "count": 2,
+      "count": 7,
       "firstSeen": "2026-11-14T17:56:35.066272Z",
-      "lastSeen": "2026-11-14T18:01:35.029997Z",
+      "lastSeen": "2026-11-14T18:26:07.779702Z",
       "source": "default-scheduler"
     }
   ],
@@ -181,6 +181,11 @@
         "memory": "10182740Ki",
         "pods": "110"
       },
+      "requested": {
+        "cpu": "950m",
+        "memory": "322Mi"
+      },
+      "podCount": 16,
       "conditions": [
         {
           "type": "MemoryPressure",
