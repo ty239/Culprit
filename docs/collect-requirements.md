@@ -28,6 +28,9 @@ Collect needs read access (`get` / `list`) to:
 pods, `pods/log`, events, nodes, secrets, configmaps, persistentvolumeclaims,
 persistentvolumes, storageclasses, serviceaccounts
 
+For a pod that hasn't been placed on a node, it also lists the pods in **every** namespace, to add
+up what is already requested on each node.
+
 If a read is denied, record that in the snapshot and keep collecting.
 
 ---
@@ -42,6 +45,7 @@ Start from one pod, collect everything about it, then follow what it points to.
 | **Logs, current and previous** | Last ~100 lines per container, including the previous container (`--previous`) | `crash-api` |
 | **Events** | All events whose `involvedObject` is the pod | `user-api` (while fresh) |
 | **Nodes** | Allocatable CPU and memory, conditions, and the images on the node (`status.images`) | `pending-api`, `user-api` |
+| **What's already requested on each node** | Total CPU and memory requests of the pods on the node, and how many pods. Only when the pod has no node yet | `full-api` |
 | **Secrets and ConfigMaps it uses** | Whether each exists, and its key **names only, never the values** | `secret-api` |
 | **Storage it uses** | PVC → PV → StorageClass | The pending-pod chain in the README |
 | **Service account** | Whether it exists | Pods blocked by a missing account |
@@ -78,6 +82,8 @@ For each test pod in `broken-pods.yaml`, the snapshot contains the evidence list
 | `secret-api` | Waiting reason `CreateContainerConfigError`, its message, and Secret `db-credentials` marked as missing |
 | `memory-api` | Last termination `OOMKilled`, exit code `137`, and the `64Mi` memory limit |
 | `pending-api` | Phase `Pending`, the `PodScheduled` condition message, the `100` CPU request, and the node's `16` allocatable CPUs |
+| `storage-api` | Phase `Pending`, PVC `storage-api-data` with phase `Pending` and class `fast-ssd`, and StorageClass `fast-ssd` marked as missing |
+| `full-api` | The `15500m` CPU request, the node's `16` allocatable CPUs, and the CPU already requested by the pods on the node |
 
 Tests can run without a cluster by using `client-go`'s fake client (`k8s.io/client-go/kubernetes/fake`)
 loaded with copies of these pods.

@@ -10,7 +10,7 @@ Each finding in a diagnosis is linked to the finding that caused it. Culprit wal
 
 - **Symptom** — what you see first (e.g. a pod stuck in `Pending`)
 - **Intermediate cause** — a resource that failed to satisfy the pod's requirements (e.g. a PVC that was never bound)
-- **Root cause** — the terminal node where the chain ends (e.g. a StorageClass with no provisioner configured)
+- **Root cause** — the terminal node where the chain ends (e.g. the StorageClass the PVC asks for doesn't exist)
 
 Each node is backed by an evidence record (`ev-N`) that points to the raw Kubernetes event or resource status that supports the finding.
 
@@ -37,4 +37,4 @@ It works in two steps: **collect** reads the pod and everything it depends on in
 | [Collect requirements](docs/collect-requirements.md) | What the collect step gathers, and its rules |
 | [Diagnose requirements](docs/diagnose-requirements.md) | The finding format and the rules that follow each chain |
 | [Broken pods evidence](broken-pods-evidence.md) | How to prove each test pod's failure by hand |
-| [Causal chain diagram](docs/causal-chain.svg) | Visual walkthrough of a pending-pod diagnosis |
+| [Causal chain diagram](docs/causal-chain.svg) | The `storage-api` diagnosis, from symptom to root cause |

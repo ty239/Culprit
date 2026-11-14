@@ -96,8 +96,10 @@ func Diagnose(snap *snapshot.Snapshot) *Diagnosis {
 
 	b := &builder{d: d, snap: snap, seen: map[string]string{}}
 	b.scheduling()
-	b.containers()
-	b.failedPod()
+	if !b.evicted() {
+		b.containers()
+		b.failedPod()
+	}
 
 	d.Healthy = len(d.Findings) == 0 && isHealthy(snap.Pod)
 	if !d.Healthy && len(d.Findings) == 0 {

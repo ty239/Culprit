@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 470" width="720" height="470" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">Causal chain for the storage-api pod</title>
+  <desc id="d">The pod storage-api is Pending. That is caused by its PersistentVolumeClaim storage-api-data being Pending, which is caused by the StorageClass fast-ssd not existing: the root cause.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0 0 L5 10 L10 0 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <!-- A solid card, so the diagram reads the same on light and dark pages. -->
+  <rect x="0.5" y="0.5" width="719" height="469" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- Symptom -->
+  <rect x="40" y="30" width="640" height="104" rx="8" fill="#fff8c5" stroke="#bf8700" stroke-width="1.5"/>
+  <text x="60" y="58" font-size="12" font-weight="700" letter-spacing="1" fill="#7d4e00">SYMPTOM · f-1</text>
+  <text x="60" y="84" font-size="17" font-weight="600" fill="#1f2328">Pod storage-api is Pending: it can't be placed on a node</text>
+  <text x="60" y="112" font-size="13" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="#57606a">ev-1  pod.status.conditions[PodScheduled] = unbound PersistentVolumeClaims</text>
+
+  <line x1="360" y1="134" x2="360" y2="180" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="318" y="146" width="84" height="22" rx="11" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="360" y="161" font-size="12" text-anchor="middle" fill="#57606a">caused by</text>
+
+  <!-- Intermediate cause -->
+  <rect x="40" y="183" width="640" height="104" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="60" y="211" font-size="12" font-weight="700" letter-spacing="1" fill="#0550ae">CAUSE · f-2</text>
+  <text x="60" y="237" font-size="17" font-weight="600" fill="#1f2328">PVC storage-api-data is Pending: no disk is bound to it</text>
+  <text x="60" y="265" font-size="13" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="#57606a">ev-2  pvcs[storage-api-data].phase = Pending</text>
+
+  <line x1="360" y1="287" x2="360" y2="333" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="318" y="299" width="84" height="22" rx="11" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="360" y="314" font-size="12" text-anchor="middle" fill="#57606a">caused by</text>
+
+  <!-- Root cause -->
+  <rect x="40" y="336" width="640" height="104" rx="8" fill="#ffebe9" stroke="#cf222e" stroke-width="2"/>
+  <text x="60" y="364" font-size="12" font-weight="700" letter-spacing="1" fill="#a40e26">ROOT CAUSE · f-3</text>
+  <text x="60" y="390" font-size="17" font-weight="600" fill="#1f2328">StorageClass fast-ssd doesn't exist, so nothing creates the disk</text>
+  <text x="60" y="418" font-size="13" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="#57606a">ev-4  storageClasses[fast-ssd].state = missing</text>
+</svg>

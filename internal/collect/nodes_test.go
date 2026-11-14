@@ -236,6 +236,96 @@ func TestNodes_DeniedIsRecordedNotFatal(t *testing.T) {
 	}
 }
 
+// --- What the other pods have already asked for ------------------------------
+
+// runningPod is a made-up pod placed on a node, in another namespace.
+func runningPod(name, node string, phase corev1.PodPhase, cpu, memory string, initCPU string) *corev1.Pod {
+	p := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "kube-system"},
+		Spec: corev1.PodSpec{
+			NodeName: node,
+			Containers: []corev1.Container{{Name: "app", Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpu), corev1.ResourceMemory: resource.MustParse(memory)},
+			}}},
+		},
+		Status: corev1.PodStatus{Phase: phase},
+	}
+	if initCPU != "" {
+		p.Spec.InitContainers = []corev1.Container{{Name: "init", Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(initCPU)},
+		}}}
+	}
+	return p
+}
+
+// A Pending pod's nodes come with what the pods already there requested.
+func TestNodes_RequestsOfOtherPods(t *testing.T) {
+	snap := collectNodesFor(t, loadPod(t, "pending-api"),
+		loadNode(t, "culprit-control-plane"), extraNode("worker-2", nil),
+		runningPod("a", "culprit-control-plane", corev1.PodRunning, "250m", "100Mi", ""),
+		runningPod("b", "culprit-control-plane", corev1.PodRunning, "100m", "50Mi", "1"), // init container asks for more
+		runningPod("done", "culprit-control-plane", corev1.PodSucceeded, "8", "1Gi", ""), // finished: holds nothing
+		runningPod("c", "worker-2", corev1.PodRunning, "500m", "20Mi", ""),
+	)
+	if len(snap.Errors) != 0 {
+		t.Fatalf("errors = %+v", snap.Errors)
+	}
+
+	want := map[string]struct {
+		cpu, memory string
+		pods        int
+	}{
+		"culprit-control-plane": {"1250m", "150Mi", 2},
+		"worker-2":              {"500m", "20Mi", 1},
+	}
+	for _, n := range snap.Nodes {
+		w := want[n.Name]
+		cpu, mem := n.Requested[corev1.ResourceCPU], n.Requested[corev1.ResourceMemory]
+		if cpu.Cmp(resource.MustParse(w.cpu)) != 0 || mem.Cmp(resource.MustParse(w.memory)) != 0 || n.PodCount != w.pods {
+			t.Errorf("%s: requested cpu=%s memory=%s pods=%d, want %s / %s / %d",
+				n.Name, cpu.String(), mem.String(), n.PodCount, w.cpu, w.memory, w.pods)
+		}
+	}
+}
+
+// A placed pod doesn't need it, so the cluster-wide pod list isn't read.
+func TestNodes_PlacedPodDoesNotListAllPods(t *testing.T) {
+	client := fake.NewSimpleClientset(loadPod(t, "crash-api"), loadNode(t, "culprit-control-plane"))
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		t.Error("pods should not be listed for a pod that already has a node")
+		return false, nil, nil
+	})
+	c := New(client)
+	c.FetchLogs = fakeLogs{}.fetch
+	snap, err := c.Collect(context.Background(), ns, "crash-api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Nodes[0].Requested != nil {
+		t.Errorf("requested = %v, want it left out", snap.Nodes[0].Requested)
+	}
+}
+
+// Rule 3: not allowed to list every pod → recorded, the nodes are still there.
+func TestNodes_DeniedPodListIsRecordedNotFatal(t *testing.T) {
+	client := fake.NewSimpleClientset(loadPod(t, "pending-api"), loadNode(t, "culprit-control-plane"))
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "", errors.New("RBAC"))
+	})
+	c := New(client)
+	c.FetchLogs = fakeLogs{}.fetch
+	snap, err := c.Collect(context.Background(), ns, "pending-api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Errors) != 1 || !snap.Errors[0].Denied || snap.Errors[0].Target != "pods (all namespaces)" {
+		t.Errorf("errors = %+v, want one denied pod-list error", snap.Errors)
+	}
+	if len(snap.Nodes) != 1 || snap.Nodes[0].Requested != nil {
+		t.Errorf("nodes = %+v, want the node without requests", snap.Nodes)
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, v := range list {
 		if strings.EqualFold(v, s) {

@@ -97,6 +97,10 @@ func (b *builder) container(c container) {
 		// Caught between two crashes.
 		b.crash(c, last, true)
 
+	case st.State.Running != nil && last != nil && wasKilled(last) && b.livenessKill(c) != nil:
+		// Running and even ready, but the kubelet keeps killing it.
+		b.crash(c, last, true)
+
 	case st.State.Running != nil && !st.Ready && !c.init:
 		evidence := []string{b.ev(c.path+".ready", "false")}
 		if e := b.lastEvent("Unhealthy", ""); e != nil {
@@ -431,6 +435,44 @@ func (b *builder) crash(c container, term *corev1.ContainerStateTerminated, runn
 			fix:      "Check the container's command and args: the program it runs must exist in the image.",
 		})
 
+	case wasKilled(term) && c.spec.LivenessProbe != nil:
+		// The app didn't stop by itself, and it has a liveness probe. Only
+		// the kubelet's events prove the probe is what killed it.
+		probe := probeText(c.spec.LivenessProbe)
+		if st.RestartCount > 0 {
+			symptom.summary = fmt.Sprintf("Container %q keeps being restarted: %d times so far", name, st.RestartCount)
+		}
+		probeEv := b.ev(c.spath+".livenessProbe", probe)
+		kill := b.livenessKill(c)
+		if kill == nil {
+			b.chain(symptom, link{
+				object: object,
+				summary: fmt.Sprintf("Container %q was force-stopped (exit code %d). It has a liveness probe (%s) that may be what stops it, but the events that would prove it have expired",
+					name, term.ExitCode, probe),
+				evidence: []string{termEv, probeEv},
+			})
+			return
+		}
+		rootEvidence := []string{probeEv}
+		why := ""
+		if e := b.lastEvent("Unhealthy", "Liveness probe failed"); e != nil {
+			rootEvidence = append(rootEvidence, b.ev("events[Unhealthy]", fmt.Sprintf("%s (seen %d times)", oneLine(e.Message), e.Count)))
+			why = ": " + strings.TrimPrefix(oneLine(e.Message), "Liveness probe failed: ")
+		}
+		b.rootChain(symptom,
+			link{
+				object:   object,
+				summary:  fmt.Sprintf("The kubelet kills container %q because its liveness probe fails (exit code %d)", name, term.ExitCode),
+				evidence: []string{termEv, b.ev("events[Killing]", oneLine(kill.Message))},
+			},
+			link{
+				object:   object,
+				summary:  fmt.Sprintf("The liveness probe (%s) fails%s", probe, why),
+				evidence: rootEvidence,
+				fix: "Point the probe at something the app really answers, or fix the app so it does. " +
+					"If the app is only slow to start, add a startupProbe or raise initialDelaySeconds.",
+			})
+
 	default:
 		exited := link{
 			object:   object,
@@ -453,6 +495,43 @@ func (b *builder) crash(c container, term *corev1.ContainerStateTerminated, runn
 			fix:      "Fix what the message says: the command, the app's code, or what is installed in the image.",
 		})
 	}
+}
+
+// wasKilled reports whether the container was stopped from outside
+// (SIGKILL or SIGTERM) rather than exiting by itself or running out of memory.
+func wasKilled(term *corev1.ContainerStateTerminated) bool {
+	return term.Reason != "OOMKilled" && (term.ExitCode == 137 || term.ExitCode == 143)
+}
+
+// livenessKill returns the kubelet's event saying it killed this container
+// for failing its liveness probe, or nil.
+func (b *builder) livenessKill(c container) *snapshot.Event {
+	if c.spec.LivenessProbe == nil {
+		return nil
+	}
+	for i := len(b.snap.Events) - 1; i >= 0; i-- {
+		e := &b.snap.Events[i]
+		if e.Reason == "Killing" && strings.Contains(e.Message, "failed liveness probe") &&
+			strings.Contains(e.Message, "Container "+c.status.Name+" ") {
+			return e
+		}
+	}
+	return nil
+}
+
+// probeText describes a probe in a few words, e.g. "GET :8000/healthz".
+func probeText(p *corev1.Probe) string {
+	switch {
+	case p.HTTPGet != nil:
+		return fmt.Sprintf("GET :%s%s", p.HTTPGet.Port.String(), p.HTTPGet.Path)
+	case p.TCPSocket != nil:
+		return fmt.Sprintf("TCP connect to :%s", p.TCPSocket.Port.String())
+	case p.Exec != nil:
+		return "command `" + strings.Join(p.Exec.Command, " ") + "`"
+	case p.GRPC != nil:
+		return fmt.Sprintf("gRPC health check on :%d", p.GRPC.Port)
+	}
+	return "unknown kind"
 }
 
 // exitHint explains the common exit codes.
@@ -500,7 +579,76 @@ func (b *builder) lastLogLine(container string, running bool) (line, source stri
 	return "", ""
 }
 
-// failedPod covers a pod the kubelet gave up on, e.g. an evicted one.
+// evicted: the kubelet stopped the whole pod, to enforce a disk limit or to
+// free up a node that was running low. It reports whether the pod was
+// evicted; the containers' own exit codes then mean nothing more.
+func (b *builder) evicted() bool {
+	snap := b.snap
+	st := snap.Pod.Status
+	if st.Phase != corev1.PodFailed || st.Reason != "Evicted" {
+		return false
+	}
+	msg := oneLine(st.Message)
+	symptom := link{
+		object:   b.podObject(),
+		summary:  "Pod was evicted: the kubelet stopped it, and it will not be restarted",
+		evidence: []string{b.ev("pod.status", "phase Failed, reason Evicted")},
+	}
+	msgEv := b.ev("pod.status.message", orNone(msg))
+	const again = " Then delete the pod and create it again: an evicted pod stays evicted."
+
+	switch lower := strings.ToLower(msg); {
+	case strings.Contains(lower, "ephemeral") && strings.Contains(lower, "limit"):
+		evidence := []string{msgEv}
+		limits := []string{}
+		for _, c := range snap.Pod.Spec.Containers {
+			if q, ok := c.Resources.Limits[corev1.ResourceEphemeralStorage]; ok {
+				evidence = append(evidence, b.ev(fmt.Sprintf("pod.spec.containers[%s].resources.limits.ephemeral-storage", c.Name), q.String()))
+				limits = append(limits, q.String())
+			}
+		}
+		allowed := "its ephemeral-storage limit allows"
+		if len(limits) > 0 {
+			allowed = fmt.Sprintf("its ephemeral-storage limit of %s allows", strings.Join(limits, " + "))
+		}
+		b.rootChain(symptom, link{
+			object:   b.podObject(),
+			summary:  "The pod wrote more to its local disk than " + allowed,
+			evidence: evidence,
+			fix:      "Raise the ephemeral-storage limit, or make the app write less to its own disk (logs and temp files count; a mounted volume doesn't)." + again,
+		})
+
+	case strings.Contains(lower, "low on resource"):
+		what := strings.TrimSuffix(strings.TrimSpace(msg[strings.Index(lower, "low on resource")+len("low on resource"):]), ".")
+		what = strings.TrimSpace(strings.TrimPrefix(what, ":"))
+		if i := strings.IndexAny(what, ". "); i > 0 {
+			what = what[:i]
+		}
+		evidence := []string{msgEv}
+		node := snap.Pod.Spec.NodeName
+		for _, n := range snap.Nodes {
+			for _, cond := range n.Conditions {
+				if n.Name == node && strings.HasSuffix(cond.Type, "Pressure") && cond.Status == "True" {
+					evidence = append(evidence, b.ev(fmt.Sprintf("nodes[%s].conditions[%s]", n.Name, cond.Type), joinNonEmpty(": ", cond.Status, cond.Message)))
+				}
+			}
+		}
+		b.rootChain(symptom, link{
+			object:   "Node " + orNone(node),
+			summary:  fmt.Sprintf("Node %s ran low on %s, and the kubelet evicted this pod to free some", orNone(node), orNone(what)),
+			evidence: evidence,
+			fix: "Free up " + orNone(what) + " on the node or add a node, and give the pod requests that match what it really uses " +
+				"(pods using more than they requested are evicted first)." + again,
+		})
+
+	default:
+		symptom.evidence = append(symptom.evidence, msgEv)
+		b.chain(symptom)
+	}
+	return true
+}
+
+// failedPod covers any other pod the kubelet gave up on.
 func (b *builder) failedPod() {
 	st := b.snap.Pod.Status
 	if st.Phase != corev1.PodFailed || len(b.d.Findings) > 0 {

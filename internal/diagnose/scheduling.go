@@ -196,12 +196,43 @@ func (b *builder) resourceCause(msg string) ([]link, bool) {
 				fix:      fmt.Sprintf("Lower the %s request to %s or less, or add a node with at least %s %s.", name, bestQty.String(), want.String(), name),
 			}}, true
 		}
+		// Big enough when empty. Is there room next to the pods already there?
+		var roomiest *snapshot.Node
+		var mostFree resource.Quantity
+		for i, n := range b.snap.Nodes {
+			if n.Missing {
+				continue
+			}
+			if n.Requested == nil {
+				// The snapshot doesn't say what the other pods requested.
+				return []link{{
+					object: b.podObject(),
+					summary: fmt.Sprintf("The pod's %s request (%s) would fit on an empty node (%s has %s), so other pods are probably using the space. The snapshot doesn't have their requests",
+						name, want.String(), best.Name, bestQty.String()),
+					evidence: evidence,
+				}}, false
+			}
+			free := n.Allocatable[name].DeepCopy()
+			free.Sub(n.Requested[name])
+			if roomiest == nil || free.Cmp(mostFree) > 0 {
+				roomiest, mostFree = &b.snap.Nodes[i], free
+			}
+		}
+		if want.Cmp(mostFree) <= 0 {
+			continue // there is room; this resource isn't what blocks it
+		}
+		used := roomiest.Requested[name]
+		total := roomiest.Allocatable[name]
+		evidence[len(evidence)-1] = b.ev(fmt.Sprintf("nodes[%s].allocatable.%s", roomiest.Name, name), total.String())
+		evidence = append(evidence, b.ev(fmt.Sprintf("nodes[%s].requested.%s", roomiest.Name, name),
+			fmt.Sprintf("%s, by %d pods", used.String(), roomiest.PodCount)))
 		return []link{{
-			object: b.podObject(),
-			summary: fmt.Sprintf("The pod's %s request (%s) would fit on an empty node (%s has %s), so other pods are using the space. Culprit doesn't collect their requests yet",
-				name, want.String(), best.Name, bestQty.String()),
+			object: "Node " + roomiest.Name,
+			summary: fmt.Sprintf("The pod asks for %s %s, but the node with the most room (%s) has only %s left: %s of its %s is already requested by the %d pods on it",
+				want.String(), name, roomiest.Name, mostFree.String(), used.String(), total.String(), roomiest.PodCount),
 			evidence: evidence,
-		}}, false
+			fix:      fmt.Sprintf("Lower the %s request to %s or less, lower the requests of the pods already on the node, or add a node.", name, mostFree.String()),
+		}}, true
 	}
 	return nil, false
 }
