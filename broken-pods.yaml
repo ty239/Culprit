@@ -81,3 +81,44 @@ spec:
           cpu: "100"
       ports:
         - containerPort: 8000
+---
+# Broken on purpose: the app's disk (PVC) asks for a StorageClass called "fast-ssd",
+# which doesn't exist, so no disk is ever created, the PVC stays Pending, and the pod
+# can't be scheduled (Pending: "pod has unbound immediate PersistentVolumeClaims").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: storage-api-data
+  labels:
+    app: storage-api
+spec:
+  storageClassName: fast-ssd
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: storage-api
+  labels:
+    app: storage-api
+    environment: development
+  annotations:
+    description: "Python app whose disk asks for a StorageClass that doesn't exist"
+spec:
+  containers:
+    - name: python-api
+      image: python:3.12-slim
+      command: ["python", "-m", "http.server", "8000"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      ports:
+        - containerPort: 8000
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: storage-api-data
